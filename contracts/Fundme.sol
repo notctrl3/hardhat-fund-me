@@ -45,6 +45,12 @@ contract FundMe {
         funders.push(msg.sender);
     }
 
+    function getAddressToAmountFunded(
+        address fundingAddress
+    ) public view returns (uint256) {
+        return addressToAmountFunded[fundingAddress];
+    }
+
     function getVersion() public view returns (uint256) {
         // ETH/USD price feed address of Sepolia Network.
         return priceFeed.version();
@@ -66,23 +72,11 @@ contract FundMe {
         require(callSuccess, "Call failed");
     }
 
-    // Explainer from: https://solidity-by-example.org/fallback/
-    // Ether is sent to contract
-    //      is msg.data empty?
-    //          /   \
-    //         yes  no
-    //         /     \
-    //    receive()?  fallback()
-    //     /   \
-    //   yes   no
-    //  /        \
-    //receive()  fallback()
-
-    fallback() external payable {
-        fund();
+    function getFunder(uint256 index) public view returns (address) {
+        return funders[index];
     }
 
-    receive() external payable {
-        fund();
+    function getPriceFeed() public view returns (AggregatorV3Interface) {
+        return priceFeed;
     }
 }
