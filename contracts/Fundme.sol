@@ -15,12 +15,12 @@ error FundMe__NotOwner();
 contract FundMe {
     using PriceConverter for uint256;
 
-    mapping(address => uint256) public addressToAmountFunded;
-    address[] public funders;
+    mapping(address => uint256) private s_addressToAmountFunded;
+    address[] private s_funders;
 
-    address public immutable i_owner;
+    address private immutable i_owner;
     uint256 public constant MINIMUM_USD = 5 ether;
-    AggregatorV3Interface public immutable priceFeed;
+    AggregatorV3Interface private immutable i_priceFeed;
 
     modifier onlyOwner() {
         if (msg.sender != i_owner) revert FundMe__NotOwner();
@@ -29,7 +29,7 @@ contract FundMe {
 
     constructor(address priceFeedAddress) {
         i_owner = msg.sender;
-        priceFeed = AggregatorV3Interface(priceFeedAddress);
+        i_priceFeed = AggregatorV3Interface(priceFeedAddress);
     }
 
     /**
@@ -38,45 +38,50 @@ contract FundMe {
      */
     function fund() public payable {
         require(
-            msg.value.getConversionRate(priceFeed) >= MINIMUM_USD,
+            msg.value.getConversionRate(i_priceFeed) >= MINIMUM_USD,
             "You need to spend more ETH!"
         );
-        addressToAmountFunded[msg.sender] += msg.value;
-        funders.push(msg.sender);
+        s_addressToAmountFunded[msg.sender] += msg.value;
+        s_funders.push(msg.sender);
     }
 
     function getAddressToAmountFunded(
         address fundingAddress
     ) public view returns (uint256) {
-        return addressToAmountFunded[fundingAddress];
+        return s_addressToAmountFunded[fundingAddress];
     }
 
     function getVersion() public view returns (uint256) {
         // ETH/USD price feed address of Sepolia Network.
-        return priceFeed.version();
+        return i_priceFeed.version();
     }
 
     function withdraw() public onlyOwner {
+        address[] memory funders = s_funders;
         for (
             uint256 funderIndex = 0;
             funderIndex < funders.length;
             funderIndex++
         ) {
             address funder = funders[funderIndex];
-            addressToAmountFunded[funder] = 0;
+            s_addressToAmountFunded[funder] = 0;
         }
-        funders = new address[](0);
-        (bool callSuccess, ) = payable(msg.sender).call{
+        s_funders = new address[](0);
+        (bool success, ) = payable(msg.sender).call{
             value: address(this).balance
-        }("");
-        require(callSuccess, "Call failed");
+        };
+        require(success, "Call failed");
     }
 
     function getFunder(uint256 index) public view returns (address) {
-        return funders[index];
+        return s_funders[index];
     }
 
     function getPriceFeed() public view returns (AggregatorV3Interface) {
-        return priceFeed;
+        return i_priceFeed;
+    }
+
+    function getOwner() public view returns (address) {
+        return i_owner;
     }
 }

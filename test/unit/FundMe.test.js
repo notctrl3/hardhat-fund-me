@@ -1,6 +1,5 @@
 const { assert, expect } = require("chai")
 const { network, deployments, ethers, getNamedAccounts } = require("hardhat")
-const { describe, beforeEach } = require("node:test")
 
 describe("FundMe", async () => {
   let fundMe
@@ -45,6 +44,68 @@ describe("FundMe", async () => {
     describe("withdraw", () => {
       beforeEach(async () => {
         await fundMe.fund({ value: sendValue })
+      })
+      it("withdraws ETH from a single funder", async () => {
+        // can also use ethers.provider.getbalance
+        const startingFundMeBalance = await fundMe.provider.getBalance(
+          fundMe.address
+        )
+        const startingDeployerBalance = await fundMe.provider.getBalance(
+          deployer
+        )
+
+        const txRes = await fundMe.withdraw()
+        const transactionReceipt = await txRes.wait()
+        const { gasUsed, effectiveGasPrice } = transactionReceipt
+        const gasCost = gasUsed.mul(effectiveGasPrice)
+
+        const endingFundMeBalance = await fundMe.provider.getBalance(
+          fundMe.address
+        )
+        const endingDeployerBalance = await fundMe.provider.getBalance(deployer)
+        assert.equal(endingFundMeBalance, 0)
+        assert.equal(
+          startingFundMeBalance.add(startingDeployerBalance).toString(),
+          endingDeployerBalance.add(gasCost).toString()
+        )
+      })
+      it("is allows us to withdraw with mutiple funders", async () => {
+        const accounts = await ethers.getSigners()
+        for (i = 1; i < 6; i++) {
+          const fundMeConnectedContract = await fundMe.connect(accounts[i])
+          await fundMeConnectedContract.fund({ value: sendValue })
+        }
+        const startingFundMeBalance = await fundMe.provider.getBalance(
+          fundMe.address
+        )
+        const startingDeployerBalance = await fundMe.provider.getBalance(
+          deployer
+        )
+        const txRes = await fundMe.withdraw()
+        const transactionReceipt = await txRes.wait()
+        const { gasUsed, effectiveGasPrice } = transactionReceipt
+        const gasCost = gasUsed.mul(effectiveGasPrice)
+        const endingFundMeBalance = await fundMe.provider.getBalance(
+          fundMe.address
+        )
+        const endingDeployerBalance = await fundMe.provider.getBalance(deployer)
+        assert.equal(endingFundMeBalance, 0)
+        assert.equal(
+          startingFundMeBalance.add(startingDeployerBalance).toString(),
+          endingDeployerBalance.add(gasCost).toString()
+        )
+        await expect(fundMe.getFunder(0)).to.be.reverted
+        for (i = 1; i < 6; i++) {
+          assert.equal(
+            await fundMe.getAddressToAmountFunded(accounts[i].address),
+            0
+          )
+        }
+      })
+      it("Only allows the owner to withdraw", async () => {
+        const accounts = await ethers.getSigners()
+        const attacter = await fundMe.connect(accounts[1])
+        await expect(attacter.withdraw()).to.be.revertedWith("FundMe__NotOwner")
       })
     })
   })
